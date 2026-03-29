@@ -28,21 +28,13 @@ void timer_init(uint32_t hz) {
     outb(0x40, (uint8_t)((divisor >> 8) & 0xFFu));
 }
 
-void timer_isr(void) {
-    timer_ticks++;
-}
+void timer_isr(void) { timer_ticks++; }
 
-uint64_t timer_get_ticks(void) {
-    return timer_ticks;
-}
+uint64_t timer_get_ticks(void) { return timer_ticks; }
 
-uint32_t timer_get_ticks32(void) {
-    return (uint32_t)timer_ticks;
-}
+uint32_t timer_get_ticks32(void) { return (uint32_t)timer_ticks; }
 
-uint32_t timer_get_hz(void) {
-    return timer_hz;
-}
+uint32_t timer_get_hz(void) { return timer_hz; }
 
 uint32_t timer_get_uptime_seconds(void) {
     const uint32_t ticks32 = (uint32_t)timer_ticks;

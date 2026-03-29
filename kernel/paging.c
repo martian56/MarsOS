@@ -62,9 +62,7 @@ void paging_init(void) {
     paging_is_enabled = 1;
 }
 
-int paging_enabled(void) {
-    return paging_is_enabled;
-}
+int paging_enabled(void) { return paging_is_enabled; }
 
 int paging_map_page(uint32_t virt, uint32_t phys, uint32_t flags) {
     const uint32_t pd_index = (virt >> 22) & 0x3FFu;

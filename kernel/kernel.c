@@ -52,8 +52,8 @@ static uint32_t shell_move_cursor_to_end(const char *line, uint32_t cursor_pos, 
     return line_len;
 }
 
-static void shell_store_history(char history[SHELL_HISTORY_MAX][SHELL_LINE_MAX], uint32_t *history_count,
-                                const char *line) {
+static void shell_store_history(char history[SHELL_HISTORY_MAX][SHELL_LINE_MAX],
+                                uint32_t *history_count, const char *line) {
     if (line[0] == '\0') {
         return;
     }
@@ -347,7 +347,8 @@ static void run_command(const char *line, const multiboot_info_t *mbi) {
     }
 
     if (streq(line, "help")) {
-        vga_puts("commands: help clear mem mmap pmm alloc allocn free vm vmmap vmunmap vmxlate vmfault uptime time ticks sleep sleepms reboot echo\n");
+        vga_puts("commands: help clear mem mmap pmm alloc allocn free vm vmmap vmunmap vmxlate "
+                 "vmfault uptime time ticks sleep sleepms reboot echo\n");
         vga_puts("editing: up/down for history\n");
         return;
     }

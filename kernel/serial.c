@@ -7,9 +7,7 @@
 
 static int serial_ready;
 
-static int serial_can_transmit(void) {
-    return (inb(COM1 + 5) & 0x20u) != 0;
-}
+static int serial_can_transmit(void) { return (inb(COM1 + 5) & 0x20u) != 0; }
 
 void serial_init(void) {
     outb(COM1 + 1, 0x00);

@@ -169,6 +169,4 @@ uint32_t pmm_free_frames(void) {
     return pmm_total - pmm_used;
 }
 
-int pmm_ready(void) {
-    return pmm_initialized;
-}
+int pmm_ready(void) { return pmm_initialized; }
