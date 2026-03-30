@@ -31,6 +31,7 @@ static int process_ready;
 #define PROCESS_USER_STACK_TOP 0x40002000u
 #define PROCESS_USER_IMAGE_MAX 0x4000u
 #define PROCESS_USER_CODE_SIZE 0x1000u
+#define PROCESS_USER_STACK_SIZE 0x1000u
 #define PROCESS_USER_PROG_DEFAULT 1u
 #define PROCESS_USER_PROG_PING_BURST 2u
 
@@ -646,6 +647,7 @@ static int process_build_user_image(uint32_t cr3, uint32_t user_prog_id, uint32_
     int code_mapped = 0;
     int stack_mapped = 0;
     volatile uint8_t *code;
+    volatile uint8_t *stack;
 
     paging_switch_directory(cr3);
 
@@ -670,6 +672,9 @@ static int process_build_user_image(uint32_t cr3, uint32_t user_prog_id, uint32_
         goto fail;
     }
     stack_mapped = 1;
+
+    stack = (volatile uint8_t *)(PROCESS_USER_STACK_TOP - PROCESS_USER_STACK_SIZE);
+    mem_zero_u8((uint8_t *)stack, PROCESS_USER_STACK_SIZE);
 
     code = (volatile uint8_t *)PROCESS_USER_CODE_VADDR;
     {
@@ -709,6 +714,7 @@ static int process_build_user_image(uint32_t cr3, uint32_t user_prog_id, uint32_
         }
 
         if (!loaded) {
+            mem_zero_u8((uint8_t *)code, PROCESS_USER_CODE_SIZE);
             if (user_prog_id == PROCESS_USER_PROG_DEFAULT) {
                 process_emit_exit_only_program(code);
             } else if (user_prog_id == PROCESS_USER_PROG_PING_BURST) {
