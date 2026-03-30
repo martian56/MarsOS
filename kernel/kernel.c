@@ -492,7 +492,8 @@ static void run_command(const char *line, const multiboot_info_t *mbi) {
     if (streq(line, "help")) {
         vga_puts(
             "commands: help clear mem mmap pmm heap kmalloc syscall syscallfs tasks taskdemo ps "
-            "spawnproc progs run sysrun send recv ipc upings selftest userprep usertest psx ls "
+            "spawnproc progs run sysrun send recv ipc upings selftest stressproc userprep usertest "
+            "psx ls "
             "cat write "
             "aspace "
             "alloc allocn free vm vmmap "
@@ -875,6 +876,64 @@ static void run_command(const char *line, const multiboot_info_t *mbi) {
             vga_puts("selftest: PASS (see serial log)\n");
         } else {
             vga_puts("selftest: FAIL (see serial log)\n");
+        }
+        return;
+    }
+
+    if (starts_with(line, "stressproc")) {
+        const char *arg = skip_spaces(line + 10);
+        uint32_t rounds = 32u;
+        uint32_t created = 0;
+        uint32_t failed = 0;
+        uint32_t remaining;
+        uint32_t drain_iters;
+
+        if (arg[0] != '\0' && !parse_u32(arg, &rounds)) {
+            vga_puts("usage: stressproc [rounds]\n");
+            return;
+        }
+
+        if (rounds == 0u || rounds > 2000u) {
+            vga_puts("stressproc: rounds must be 1..2000\n");
+            return;
+        }
+
+        for (uint32_t round = 0; round < rounds; round++) {
+            const int pid = exec_spawn("userprobe");
+
+            if (pid < 0) {
+                failed++;
+                continue;
+            }
+
+            created++;
+            for (uint32_t i = 0; i < 6u; i++) {
+                scheduler_yield();
+                process_reap();
+            }
+        }
+
+        drain_iters = (rounds > 256u) ? 1024u : (rounds * 4u + 16u);
+        for (uint32_t i = 0; i < drain_iters; i++) {
+            scheduler_yield();
+            process_reap();
+        }
+
+        process_reap();
+        remaining = process_count();
+
+        vga_puts("stressproc created=");
+        vga_put_dec32(created);
+        vga_puts(" failed=");
+        vga_put_dec32(failed);
+        vga_puts(" remaining=");
+        vga_put_dec32(remaining);
+        vga_putc('\n');
+
+        if (failed == 0u && remaining == 1u) {
+            vga_puts("stressproc: PASS\n");
+        } else {
+            vga_puts("stressproc: FAIL\n");
         }
         return;
     }
