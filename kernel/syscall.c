@@ -215,8 +215,7 @@ uint32_t syscall_dispatch(uint32_t *frame) {
         const char *msg_ptr = (const char *)frame[6];
         char msg_buf[64];
 
-        if (copy_in_string(msg_buf, sizeof(msg_buf), msg_ptr) == UINT32_MAX ||
-            msg_buf[0] == '\0') {
+        if (copy_in_string(msg_buf, sizeof(msg_buf), msg_ptr) == UINT32_MAX || msg_buf[0] == '\0') {
             return 0u;
         }
 

@@ -21,7 +21,8 @@ jobs:
             grub-pc-bin \
             xorriso \
             mtools \
-            clang-format
+            clang-format \
+            qemu-system-x86
 
       - name: Check formatting
         run: make format-check
@@ -31,3 +32,6 @@ jobs:
 
       - name: Verify multiboot kernel
         run: make check
+
+      - name: Smoke test
+        run: make smoke

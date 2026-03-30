@@ -107,7 +107,7 @@ user/hello_ping.o: user/hello_ping.s
 	$(CC) $(ASFLAGS) $< -o $@
 
 user/hello_ping.elf: user/hello_ping.o
-	$(LD) -m elf_i386 -nostdlib -N -Ttext 0x40000000 $< -o $@
+	$(LD) -m elf_i386 -nostdlib -N -Ttext 0x40000100 $< -o $@
 
 user/hello_ping.marshex: user/hello_ping.elf
 	./tools/elf_to_marshex.sh $< $@

@@ -90,6 +90,7 @@ static program_entry_t programs[] = {
     {"writer", EXEC_MODE_KERNEL, app_writer, 0u},
     {"hello_ping", EXEC_MODE_USER, 0, 0u},
     {"helloapp", EXEC_MODE_USER, 0, 0u},
+    {"badimg", EXEC_MODE_USER, 0, 0u},
     {"userprobe", EXEC_MODE_USER, 0, 1u},
     {"uping", EXEC_MODE_USER, 0, 2u},
 };

@@ -222,10 +222,14 @@ static int process_load_user_image_bytes_from_vfs(const char *program_name, uint
     }
 
     if (str_len(image_text) < 2u) {
-        return 0;
+        return -1;
     }
 
-    return parse_user_image_hex(image_text, dst, dst_cap, out_len);
+    if (!parse_user_image_hex(image_text, dst, dst_cap, out_len)) {
+        return -1;
+    }
+
+    return 1;
 }
 
 static int process_is_elf32_image(const uint8_t *image, uint32_t image_len) {
@@ -599,16 +603,17 @@ static int process_build_user_image(uint32_t cr3, uint32_t user_prog_id, uint32_
     {
         uint8_t *image = (uint8_t *)kmalloc(PROCESS_USER_IMAGE_MAX);
         uint32_t loaded_len = 0;
+        int image_status = 0;
         int loaded = 0;
 
         if (image != 0) {
-            if (process_load_user_image_bytes_from_vfs(program_name, image, PROCESS_USER_IMAGE_MAX,
-                                                       &loaded_len)) {
+            image_status = process_load_user_image_bytes_from_vfs(
+                program_name, image, PROCESS_USER_IMAGE_MAX, &loaded_len);
+            if (image_status > 0) {
                 if (process_is_elf32_image(image, loaded_len)) {
                     loaded = process_load_elf32_single_page(image, loaded_len, code,
                                                             PROCESS_USER_CODE_VADDR,
-                                                            PROCESS_USER_CODE_SIZE,
-                                                            &entry);
+                                                            PROCESS_USER_CODE_SIZE, &entry);
                 } else {
                     if (loaded_len > PROCESS_USER_CODE_SIZE) {
                         loaded = 0;
@@ -619,8 +624,16 @@ static int process_build_user_image(uint32_t cr3, uint32_t user_prog_id, uint32_
                         loaded = 1;
                     }
                 }
+
+                if (!loaded) {
+                    image_status = -1;
+                }
             }
             kfree(image);
+        }
+
+        if (image_status < 0) {
+            goto fail;
         }
 
         if (!loaded) {

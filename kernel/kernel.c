@@ -44,6 +44,7 @@ static void kernel_run_selftest(void) {
     int pid_probe;
     int pid_hello_ping;
     int pid_helloapp;
+    int pid_badimg = -1;
 
     serial_puts("selftest: start\n");
 
@@ -53,10 +54,15 @@ static void kernel_run_selftest(void) {
     pid_probe = exec_spawn("userprobe");
     pid_hello_ping = exec_spawn("hello_ping");
     pid_helloapp = exec_spawn("helloapp");
+    if (vfs_write_file("app.badimg", "MARSHEX GG")) {
+        pid_badimg = exec_spawn("badimg");
+    }
 
     if (pid_probe >= 0 || pid_hello_ping >= 0 || pid_helloapp >= 0) {
-        scheduler_yield();
-        process_reap();
+        for (uint32_t i = 0; i < 12u; i++) {
+            scheduler_yield();
+            process_reap();
+        }
     }
     __asm__ volatile("int $0x80" : "=a"(ping_after) : "a"(18u) : "cc", "memory");
     ping_delta = ping_after - ping_before;
@@ -69,12 +75,14 @@ static void kernel_run_selftest(void) {
     serial_put_hex32((uint32_t)pid_hello_ping);
     serial_puts(" pid_helloapp=");
     serial_put_hex32((uint32_t)pid_helloapp);
+    serial_puts(" pid_badimg=");
+    serial_put_hex32((uint32_t)pid_badimg);
     serial_puts(" prog_count=");
     serial_put_hex32(prog_count);
     serial_puts("\n");
 
-    if (prog_count >= 6u && pid_probe >= 0 && pid_hello_ping >= 0 && pid_helloapp >= 0 &&
-        ping_delta >= 6u) {
+    if (prog_count >= 7u && pid_probe >= 0 && pid_hello_ping >= 0 && pid_helloapp >= 0 &&
+        pid_badimg < 0 && ping_delta == 6u) {
         serial_puts("selftest: PASS\n");
     } else {
         serial_puts("selftest: FAIL spawn path\n");
