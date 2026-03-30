@@ -6,3 +6,8 @@
 
 # Build outputs
 iso/boot/kernel.bin
+
+# Generated userspace app packaging artifacts
+kernel/generated_user_apps.h
+user/*.elf
+user/*.marshex

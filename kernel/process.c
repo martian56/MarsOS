@@ -1,10 +1,12 @@
 #include <stdint.h>
 
 #include "gdt.h"
+#include "kheap.h"
 #include "paging.h"
 #include "pmm.h"
 #include "process.h"
 #include "scheduler.h"
+#include "vfs.h"
 
 #define PROCESS_MAX 32u
 
@@ -14,6 +16,7 @@ typedef struct {
     uint32_t cr3;
     uint32_t user_code_frame;
     uint32_t user_stack_frame;
+    uint32_t user_entry;
     uint32_t syscall_mask_low;
     uint8_t is_kernel;
     uint8_t active;
@@ -26,12 +29,306 @@ static int process_ready;
 
 #define PROCESS_USER_CODE_VADDR 0x40000000u
 #define PROCESS_USER_STACK_TOP 0x40002000u
+#define PROCESS_USER_IMAGE_MAX 0x4000u
+#define PROCESS_USER_CODE_SIZE 0x1000u
 #define PROCESS_USER_PROG_DEFAULT 1u
 #define PROCESS_USER_PROG_PING_BURST 2u
 
 static int process_build_user_image(uint32_t cr3, uint32_t user_prog_id, uint32_t *code_frame_out,
-                                    uint32_t *stack_frame_out);
+                                    uint32_t *stack_frame_out, uint32_t *entry_out,
+                                    const char *program_name);
+static int process_find_by_tid(uint32_t tid);
 extern void usermode_switch(uint32_t entry, uint32_t user_stack_top);
+
+typedef struct {
+    uint8_t e_ident[16];
+    uint16_t e_type;
+    uint16_t e_machine;
+    uint32_t e_version;
+    uint32_t e_entry;
+    uint32_t e_phoff;
+    uint32_t e_shoff;
+    uint32_t e_flags;
+    uint16_t e_ehsize;
+    uint16_t e_phentsize;
+    uint16_t e_phnum;
+    uint16_t e_shentsize;
+    uint16_t e_shnum;
+    uint16_t e_shstrndx;
+} __attribute__((packed)) elf32_ehdr_t;
+
+typedef struct {
+    uint32_t p_type;
+    uint32_t p_offset;
+    uint32_t p_vaddr;
+    uint32_t p_paddr;
+    uint32_t p_filesz;
+    uint32_t p_memsz;
+    uint32_t p_flags;
+    uint32_t p_align;
+} __attribute__((packed)) elf32_phdr_t;
+
+#define ELF_MAGIC_0 0x7Fu
+#define ELF_MAGIC_1 'E'
+#define ELF_MAGIC_2 'L'
+#define ELF_MAGIC_3 'F'
+#define ELF_CLASS_32 1u
+#define ELF_DATA_LE 1u
+#define ELF_VERSION_CURRENT 1u
+#define ELF_MACHINE_X86 3u
+#define ELF_TYPE_EXEC 2u
+#define ELF_TYPE_DYN 3u
+#define ELF_PT_LOAD 1u
+
+static uint32_t str_len(const char *s) {
+    uint32_t n = 0;
+
+    if (s == 0) {
+        return 0;
+    }
+
+    while (s[n] != '\0') {
+        n++;
+    }
+
+    return n;
+}
+
+static int parse_hex_nibble(char c, uint8_t *value_out) {
+    if (c >= '0' && c <= '9') {
+        *value_out = (uint8_t)(c - '0');
+        return 1;
+    }
+
+    if (c >= 'a' && c <= 'f') {
+        *value_out = (uint8_t)(10 + (c - 'a'));
+        return 1;
+    }
+
+    if (c >= 'A' && c <= 'F') {
+        *value_out = (uint8_t)(10 + (c - 'A'));
+        return 1;
+    }
+
+    return 0;
+}
+
+static void mem_copy_u8(uint8_t *dst, const uint8_t *src, uint32_t n) {
+    for (uint32_t i = 0; i < n; i++) {
+        dst[i] = src[i];
+    }
+}
+
+static void mem_zero_u8(uint8_t *dst, uint32_t n) {
+    for (uint32_t i = 0; i < n; i++) {
+        dst[i] = 0;
+    }
+}
+
+static const char *skip_ws(const char *p) {
+    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') {
+        p++;
+    }
+    return p;
+}
+
+static int str_eq_n(const char *a, const char *b, uint32_t n) {
+    for (uint32_t i = 0; i < n; i++) {
+        if (a[i] != b[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int parse_user_image_hex(const char *text, volatile uint8_t *code, uint32_t code_cap,
+                                uint32_t *out_len) {
+    uint32_t count = 0;
+    const char *p;
+
+    if (text == 0 || code == 0 || out_len == 0 || code_cap == 0u) {
+        return 0;
+    }
+
+    p = skip_ws(text);
+    if (str_eq_n(p, "MARSHEX", 7u)) {
+        p += 7;
+    }
+
+    while (1) {
+        uint8_t hi;
+        uint8_t lo;
+
+        p = skip_ws(p);
+        if (*p == '\0') {
+            break;
+        }
+
+        if (p[1] == '\0') {
+            return 0;
+        }
+
+        if (!parse_hex_nibble(p[0], &hi) || !parse_hex_nibble(p[1], &lo)) {
+            return 0;
+        }
+
+        if (count >= code_cap) {
+            return 0;
+        }
+
+        code[count++] = (uint8_t)((hi << 4) | lo);
+        p += 2;
+    }
+
+    if (count == 0u) {
+        return 0;
+    }
+
+    *out_len = count;
+    return 1;
+}
+
+static int process_load_user_image_bytes_from_vfs(const char *program_name, uint8_t *dst,
+                                                  uint32_t dst_cap, uint32_t *out_len) {
+    const char *image_text;
+
+    if (program_name == 0 || program_name[0] == '\0') {
+        return 0;
+    }
+
+    image_text = vfs_read_file(program_name);
+    if (image_text == 0) {
+        char alt_name[40];
+        uint32_t i = 0;
+        const char *prefix = "app.";
+
+        while (prefix[i] != '\0' && i + 1u < sizeof(alt_name)) {
+            alt_name[i] = prefix[i];
+            i++;
+        }
+
+        {
+            uint32_t j = 0;
+            while (program_name[j] != '\0' && i + 1u < sizeof(alt_name)) {
+                alt_name[i++] = program_name[j++];
+            }
+        }
+        alt_name[i] = '\0';
+
+        image_text = vfs_read_file(alt_name);
+        if (image_text == 0) {
+            return 0;
+        }
+    }
+
+    if (str_len(image_text) < 2u) {
+        return 0;
+    }
+
+    return parse_user_image_hex(image_text, dst, dst_cap, out_len);
+}
+
+static int process_is_elf32_image(const uint8_t *image, uint32_t image_len) {
+    if (image == 0 || image_len < sizeof(elf32_ehdr_t)) {
+        return 0;
+    }
+
+    return image[0] == ELF_MAGIC_0 && image[1] == ELF_MAGIC_1 && image[2] == ELF_MAGIC_2 &&
+           image[3] == ELF_MAGIC_3;
+}
+
+static int process_load_elf32_single_page(const uint8_t *image, uint32_t image_len,
+                                          volatile uint8_t *code, uint32_t code_vaddr,
+                                          uint32_t code_size, uint32_t *entry_out) {
+    const elf32_ehdr_t *eh;
+    int loaded_any = 0;
+
+    if (image == 0 || code == 0 || entry_out == 0 || image_len < sizeof(elf32_ehdr_t)) {
+        return 0;
+    }
+
+    eh = (const elf32_ehdr_t *)image;
+
+    if (eh->e_ident[0] != ELF_MAGIC_0 || eh->e_ident[1] != ELF_MAGIC_1 ||
+        eh->e_ident[2] != ELF_MAGIC_2 || eh->e_ident[3] != ELF_MAGIC_3) {
+        return 0;
+    }
+    if (eh->e_ident[4] != ELF_CLASS_32 || eh->e_ident[5] != ELF_DATA_LE ||
+        eh->e_ident[6] != ELF_VERSION_CURRENT) {
+        return 0;
+    }
+    if (eh->e_machine != ELF_MACHINE_X86) {
+        return 0;
+    }
+    if (eh->e_type != ELF_TYPE_EXEC && eh->e_type != ELF_TYPE_DYN) {
+        return 0;
+    }
+    if (eh->e_phentsize != sizeof(elf32_phdr_t)) {
+        return 0;
+    }
+    if (eh->e_phoff > image_len) {
+        return 0;
+    }
+    if (eh->e_phnum > 0u) {
+        const uint32_t ph_bytes = (uint32_t)eh->e_phnum * (uint32_t)eh->e_phentsize;
+        if (eh->e_phoff > image_len - ph_bytes) {
+            return 0;
+        }
+    }
+
+    mem_zero_u8((uint8_t *)code, code_size);
+
+    for (uint32_t i = 0; i < eh->e_phnum; i++) {
+        const elf32_phdr_t *ph =
+            (const elf32_phdr_t *)(image + eh->e_phoff + ((uint32_t)i * eh->e_phentsize));
+        uint32_t seg_off;
+
+        if (ph->p_type != ELF_PT_LOAD) {
+            continue;
+        }
+
+        if (ph->p_memsz == 0u) {
+            continue;
+        }
+
+        if (ph->p_filesz > ph->p_memsz) {
+            return 0;
+        }
+
+        if (ph->p_offset > image_len || ph->p_filesz > image_len - ph->p_offset) {
+            return 0;
+        }
+
+        if (ph->p_vaddr < code_vaddr) {
+            return 0;
+        }
+
+        seg_off = ph->p_vaddr - code_vaddr;
+        if (seg_off > code_size || ph->p_memsz > code_size - seg_off) {
+            return 0;
+        }
+
+        if (ph->p_filesz > 0u) {
+            mem_copy_u8((uint8_t *)code + seg_off, image + ph->p_offset, ph->p_filesz);
+        }
+        if (ph->p_memsz > ph->p_filesz) {
+            mem_zero_u8((uint8_t *)code + seg_off + ph->p_filesz, ph->p_memsz - ph->p_filesz);
+        }
+
+        loaded_any = 1;
+    }
+
+    if (!loaded_any) {
+        return 0;
+    }
+
+    if (eh->e_entry < code_vaddr || eh->e_entry >= (code_vaddr + code_size)) {
+        return 0;
+    }
+
+    *entry_out = eh->e_entry;
+    return 1;
+}
 
 static uint32_t process_emit_ping_program(volatile uint8_t *code, uint32_t ping_count) {
     uint32_t off = 0;
@@ -122,12 +419,20 @@ static void process_unmap_user_pages(uint32_t cr3) {
 }
 
 static void process_user_task_entry(void *arg) {
+    const uint32_t tid = scheduler_current_task_id();
+    uint32_t user_entry = PROCESS_USER_CODE_VADDR;
+    int idx;
     uint32_t kernel_stack_top;
 
     (void)arg;
+    idx = process_find_by_tid(tid);
+    if (idx >= 0 && process_table[idx].user_entry != 0u) {
+        user_entry = process_table[idx].user_entry;
+    }
+
     __asm__ volatile("mov %%esp, %0" : "=r"(kernel_stack_top));
     gdt_set_kernel_stack(kernel_stack_top);
-    usermode_switch(PROCESS_USER_CODE_VADDR, PROCESS_USER_STACK_TOP - 16u);
+    usermode_switch(user_entry, PROCESS_USER_STACK_TOP - 16u);
 }
 
 #define SYSCALL_BIT(x) (1u << (x))
@@ -191,6 +496,7 @@ static int process_spawn_common(const char *name, task_entry_t entry, void *arg,
     uint32_t cr3 = 0;
     uint32_t code_frame = 0;
     uint32_t stack_frame = 0;
+    uint32_t user_entry = PROCESS_USER_CODE_VADDR;
     uint32_t user_prog_id = PROCESS_USER_PROG_DEFAULT;
 
     if (!process_ready) {
@@ -217,7 +523,8 @@ static int process_spawn_common(const char *name, task_entry_t entry, void *arg,
             return -1;
         }
 
-        if (!process_build_user_image(cr3, user_prog_id, &code_frame, &stack_frame)) {
+        if (!process_build_user_image(cr3, user_prog_id, &code_frame, &stack_frame, &user_entry,
+                                      name)) {
             pmm_free_frame(cr3);
             return -1;
         }
@@ -243,6 +550,7 @@ static int process_spawn_common(const char *name, task_entry_t entry, void *arg,
     process_table[slot].cr3 = cr3;
     process_table[slot].user_code_frame = code_frame;
     process_table[slot].user_stack_frame = stack_frame;
+    process_table[slot].user_entry = user_entry;
     process_table[slot].syscall_mask_low =
         (is_kernel != 0) ? PROCESS_SYSCALL_MASK_KERNEL : PROCESS_SYSCALL_MASK_USER;
     process_table[slot].is_kernel = is_kernel;
@@ -253,10 +561,12 @@ static int process_spawn_common(const char *name, task_entry_t entry, void *arg,
 }
 
 static int process_build_user_image(uint32_t cr3, uint32_t user_prog_id, uint32_t *code_frame_out,
-                                    uint32_t *stack_frame_out) {
+                                    uint32_t *stack_frame_out, uint32_t *entry_out,
+                                    const char *program_name) {
     const uint32_t prev_cr3 = paging_current_directory_phys();
     uint32_t code_frame = 0;
     uint32_t stack_frame = 0;
+    uint32_t entry = PROCESS_USER_CODE_VADDR;
     int code_mapped = 0;
     int stack_mapped = 0;
     volatile uint8_t *code;
@@ -286,17 +596,49 @@ static int process_build_user_image(uint32_t cr3, uint32_t user_prog_id, uint32_
     stack_mapped = 1;
 
     code = (volatile uint8_t *)PROCESS_USER_CODE_VADDR;
-    if (user_prog_id == PROCESS_USER_PROG_DEFAULT) {
-        process_emit_exit_only_program(code);
-    } else if (user_prog_id == PROCESS_USER_PROG_PING_BURST) {
-        process_emit_ping_program(code, 8u);
-    } else {
-        process_emit_ping_program(code, 2u);
+    {
+        uint8_t *image = (uint8_t *)kmalloc(PROCESS_USER_IMAGE_MAX);
+        uint32_t loaded_len = 0;
+        int loaded = 0;
+
+        if (image != 0) {
+            if (process_load_user_image_bytes_from_vfs(program_name, image, PROCESS_USER_IMAGE_MAX,
+                                                       &loaded_len)) {
+                if (process_is_elf32_image(image, loaded_len)) {
+                    loaded = process_load_elf32_single_page(image, loaded_len, code,
+                                                            PROCESS_USER_CODE_VADDR,
+                                                            PROCESS_USER_CODE_SIZE,
+                                                            &entry);
+                } else {
+                    if (loaded_len > PROCESS_USER_CODE_SIZE) {
+                        loaded = 0;
+                    } else {
+                        mem_zero_u8((uint8_t *)code, PROCESS_USER_CODE_SIZE);
+                        mem_copy_u8((uint8_t *)code, image, loaded_len);
+                        entry = PROCESS_USER_CODE_VADDR;
+                        loaded = 1;
+                    }
+                }
+            }
+            kfree(image);
+        }
+
+        if (!loaded) {
+            if (user_prog_id == PROCESS_USER_PROG_DEFAULT) {
+                process_emit_exit_only_program(code);
+            } else if (user_prog_id == PROCESS_USER_PROG_PING_BURST) {
+                process_emit_ping_program(code, 8u);
+            } else {
+                process_emit_ping_program(code, 2u);
+            }
+            entry = PROCESS_USER_CODE_VADDR;
+        }
     }
 
     paging_switch_directory(prev_cr3);
     *code_frame_out = code_frame;
     *stack_frame_out = stack_frame;
+    *entry_out = entry;
     return 1;
 
 fail:
@@ -327,6 +669,7 @@ int process_init(void) {
         process_table[i].cr3 = 0;
         process_table[i].user_code_frame = 0;
         process_table[i].user_stack_frame = 0;
+        process_table[i].user_entry = 0;
         process_table[i].syscall_mask_low = 0;
         process_table[i].is_kernel = 0;
         process_table[i].active = 0;
@@ -338,6 +681,7 @@ int process_init(void) {
     process_table[0].cr3 = paging_kernel_directory_phys();
     process_table[0].user_code_frame = 0;
     process_table[0].user_stack_frame = 0;
+    process_table[0].user_entry = 0;
     process_table[0].syscall_mask_low = PROCESS_SYSCALL_MASK_KERNEL;
     process_table[0].is_kernel = 1;
     process_table[0].active = 1;
@@ -384,6 +728,7 @@ void process_reap(void) {
                 process_table[i].cr3 = 0;
                 process_table[i].user_code_frame = 0;
                 process_table[i].user_stack_frame = 0;
+                process_table[i].user_entry = 0;
                 process_table[i].syscall_mask_low = 0;
                 process_table[i].is_kernel = 0;
                 process_table[i].name[0] = '\0';
@@ -462,6 +807,7 @@ int process_info_at(uint32_t index, process_info_t *info_out) {
                 info_out->cr3 = process_table[i].cr3;
                 info_out->user_code_frame = process_table[i].user_code_frame;
                 info_out->user_stack_frame = process_table[i].user_stack_frame;
+                info_out->user_entry = process_table[i].user_entry;
                 info_out->syscall_mask_low = process_table[i].syscall_mask_low;
                 info_out->is_kernel = process_table[i].is_kernel;
                 return 1;

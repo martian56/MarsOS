@@ -20,7 +20,6 @@
 .extern syscall_dispatch
 
 page_fault_stub:
-    cli
     cld
     push %ds
     push %es
@@ -30,9 +29,14 @@ page_fault_stub:
     mov 48(%esp), %eax
     push %eax
     call paging_handle_page_fault
-.page_fault_hang:
-    hlt
-    jmp .page_fault_hang
+    add $4, %esp
+    popa
+    pop %gs
+    pop %fs
+    pop %es
+    pop %ds
+    add $4, %esp
+    iret
 
 isr_fault_stub:
     cld

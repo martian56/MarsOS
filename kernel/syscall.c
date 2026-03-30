@@ -78,26 +78,16 @@ static int ptr_range_ok(const void *ptr, uint32_t size, int user_only) {
     return 1;
 }
 
-static uint32_t str_len_limited(const char *s, uint32_t max_len) {
-    uint32_t n = 0;
-
-    while (n < max_len && s[n] != '\0') {
-        n++;
-    }
-
-    return n;
-}
-
 static uint32_t copy_in_string(char *dst, uint32_t dst_size, const char *src) {
     uint32_t i = 0;
 
     if (dst == 0 || src == 0 || dst_size == 0u) {
-        return 0;
+        return UINT32_MAX;
     }
 
     while (i + 1u < dst_size) {
         if (!ptr_range_mapped(src + i, 1u)) {
-            return 0;
+            return UINT32_MAX;
         }
 
         if (src[i] == '\0') {
@@ -153,7 +143,8 @@ uint32_t syscall_dispatch(uint32_t *frame) {
         const uint32_t out_size = frame[5];
         char name_buf[40];
 
-        if (copy_in_string(name_buf, sizeof(name_buf), name_ptr) == 0u) {
+        if (copy_in_string(name_buf, sizeof(name_buf), name_ptr) == UINT32_MAX ||
+            name_buf[0] == '\0') {
             return 0xFFFFFFFFu;
         }
 
@@ -170,12 +161,12 @@ uint32_t syscall_dispatch(uint32_t *frame) {
         char name_buf[40];
         char data_buf[128];
 
-        if (copy_in_string(name_buf, sizeof(name_buf), name_ptr) == 0u) {
+        if (copy_in_string(name_buf, sizeof(name_buf), name_ptr) == UINT32_MAX ||
+            name_buf[0] == '\0') {
             return 0u;
         }
 
-        if (copy_in_string(data_buf, sizeof(data_buf), data_ptr) == 0u &&
-            str_len_limited(data_ptr, 1u) > 0u) {
+        if (copy_in_string(data_buf, sizeof(data_buf), data_ptr) == UINT32_MAX) {
             return 0u;
         }
 
@@ -198,7 +189,8 @@ uint32_t syscall_dispatch(uint32_t *frame) {
         const char *name_ptr = (const char *)frame[4];
         char name_buf[40];
 
-        if (copy_in_string(name_buf, sizeof(name_buf), name_ptr) == 0u) {
+        if (copy_in_string(name_buf, sizeof(name_buf), name_ptr) == UINT32_MAX ||
+            name_buf[0] == '\0') {
             return 0xFFFFFFFFu;
         }
 
@@ -223,7 +215,8 @@ uint32_t syscall_dispatch(uint32_t *frame) {
         const char *msg_ptr = (const char *)frame[6];
         char msg_buf[64];
 
-        if (copy_in_string(msg_buf, sizeof(msg_buf), msg_ptr) == 0u) {
+        if (copy_in_string(msg_buf, sizeof(msg_buf), msg_ptr) == UINT32_MAX ||
+            msg_buf[0] == '\0') {
             return 0u;
         }
 

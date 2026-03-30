@@ -11,6 +11,7 @@ typedef struct {
 	uint32_t cr3;
 	uint32_t user_code_frame;
 	uint32_t user_stack_frame;
+	uint32_t user_entry;
 	uint32_t syscall_mask_low;
 	uint8_t is_kernel;
 } process_info_t;

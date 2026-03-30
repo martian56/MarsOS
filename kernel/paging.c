@@ -2,6 +2,7 @@
 
 #include "paging.h"
 #include "pmm.h"
+#include "scheduler.h"
 #include "serial.h"
 #include "vga.h"
 
@@ -319,8 +320,27 @@ void paging_switch_directory(uint32_t directory_phys) {
 void paging_handle_page_fault(uint32_t error_code) {
     uint32_t cr2;
 
-    __asm__ volatile("cli");
     __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
+
+    if ((error_code & 0x4u) != 0u && scheduler_current_task_id() != 0u) {
+        vga_puts("\nuser page fault: task terminated\n");
+        vga_puts("cr2=");
+        vga_put_hex32(cr2);
+        vga_puts(" err=");
+        vga_put_hex32(error_code);
+        vga_putc('\n');
+
+        serial_puts("user page fault: task terminated cr2=");
+        serial_put_hex32(cr2);
+        serial_puts(" err=");
+        serial_put_hex32(error_code);
+        serial_puts("\n");
+
+        scheduler_exit_current();
+        return;
+    }
+
+    __asm__ volatile("cli");
 
     vga_puts("\n\nKERNEL PANIC: page fault\n");
     vga_puts("cr2=");

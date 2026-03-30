@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include "generated_user_apps.h"
 #include "kheap.h"
 #include "vfs.h"
 
@@ -22,6 +23,14 @@ static uint32_t str_len(const char *s) {
         n++;
     }
     return n;
+}
+
+static int vfs_name_valid(const char *name) {
+    if (name == 0 || name[0] == '\0') {
+        return 0;
+    }
+
+    return str_len(name) < VFS_NAME_MAX;
 }
 
 static int str_eq(const char *a, const char *b) {
@@ -83,6 +92,14 @@ int vfs_init(void) {
         return 0;
     }
 
+    if (!vfs_write_file("app.hello_ping", app_hello_ping_marshex)) {
+        return 0;
+    }
+
+    if (!vfs_write_file("app.helloapp", app_hello_ping_marshex)) {
+        return 0;
+    }
+
     return 1;
 }
 
@@ -91,11 +108,11 @@ int vfs_write_file(const char *name, const char *data) {
     uint32_t len;
     char *buf;
 
-    if (!vfs_ready || name == 0 || data == 0) {
+    if (!vfs_ready || data == 0) {
         return 0;
     }
 
-    if (name[0] == '\0') {
+    if (!vfs_name_valid(name)) {
         return 0;
     }
 
@@ -132,7 +149,7 @@ int vfs_write_file(const char *name, const char *data) {
 const char *vfs_read_file(const char *name) {
     int idx;
 
-    if (!vfs_ready || name == 0) {
+    if (!vfs_ready || !vfs_name_valid(name)) {
         return 0;
     }
 
@@ -148,7 +165,7 @@ int vfs_read_file_into(const char *name, char *out, uint32_t out_size) {
     int idx;
     uint32_t i;
 
-    if (!vfs_ready || name == 0 || out == 0 || out_size == 0u) {
+    if (!vfs_ready || !vfs_name_valid(name) || out == 0 || out_size == 0u) {
         return -1;
     }
 

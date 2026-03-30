@@ -38,30 +38,43 @@ static void demo_task(void *arg) {
 
 static void kernel_run_selftest(void) {
     uint32_t ping_before;
+    uint32_t ping_after;
+    uint32_t ping_delta;
     uint32_t prog_count;
-    int pid;
+    int pid_probe;
+    int pid_hello_ping;
+    int pid_helloapp;
 
     serial_puts("selftest: start\n");
 
     __asm__ volatile("int $0x80" : "=a"(ping_before) : "a"(18u) : "cc", "memory");
     __asm__ volatile("int $0x80" : "=a"(prog_count) : "a"(11u) : "cc", "memory");
 
-    pid = exec_spawn("userprobe");
-    if (pid >= 0) {
+    pid_probe = exec_spawn("userprobe");
+    pid_hello_ping = exec_spawn("hello_ping");
+    pid_helloapp = exec_spawn("helloapp");
+
+    if (pid_probe >= 0 || pid_hello_ping >= 0 || pid_helloapp >= 0) {
         scheduler_yield();
         process_reap();
     }
-    __asm__ volatile("int $0x80" : "=a"(ping_before) : "a"(18u) : "cc", "memory");
+    __asm__ volatile("int $0x80" : "=a"(ping_after) : "a"(18u) : "cc", "memory");
+    ping_delta = ping_after - ping_before;
 
-    serial_puts("selftest: ping_count=");
-    serial_put_hex32(ping_before);
-    serial_puts(" pid=");
-    serial_put_hex32((uint32_t)pid);
+    serial_puts("selftest: ping_delta=");
+    serial_put_hex32(ping_delta);
+    serial_puts(" pid_probe=");
+    serial_put_hex32((uint32_t)pid_probe);
+    serial_puts(" pid_hello_ping=");
+    serial_put_hex32((uint32_t)pid_hello_ping);
+    serial_puts(" pid_helloapp=");
+    serial_put_hex32((uint32_t)pid_helloapp);
     serial_puts(" prog_count=");
     serial_put_hex32(prog_count);
     serial_puts("\n");
 
-    if (prog_count >= 4u && pid >= 0) {
+    if (prog_count >= 6u && pid_probe >= 0 && pid_hello_ping >= 0 && pid_helloapp >= 0 &&
+        ping_delta >= 6u) {
         serial_puts("selftest: PASS\n");
     } else {
         serial_puts("selftest: FAIL spawn path\n");
@@ -645,6 +658,8 @@ static void run_command(const char *line, const multiboot_info_t *mbi) {
             vga_put_hex32(info.user_code_frame);
             vga_puts(" ustack=");
             vga_put_hex32(info.user_stack_frame);
+            vga_puts(" uentry=");
+            vga_put_hex32(info.user_entry);
             vga_putc('\n');
 
             vga_puts("  mask=");

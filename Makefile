@@ -9,7 +9,10 @@ CFLAGS = -m32 -ffreestanding -fno-pie -fno-stack-protector -fno-asynchronous-unw
 ASFLAGS = -m32 -ffreestanding -c
 LDFLAGS = -m elf_i386 -T linker.ld -nostdlib
 
-.PHONY: all run clean check smoke format format-check
+USER_HEX_APP = user/hello_ping.marshex
+USER_APPS_HEADER = kernel/generated_user_apps.h
+
+.PHONY: all run clean check smoke format format-check apphex userapps
 
 all: mars.iso
 
@@ -49,7 +52,7 @@ kernel/syscall.o: kernel/syscall.c kernel/syscall.h kernel/timer.h kernel/kheap.
 kernel/scheduler.o: kernel/scheduler.c kernel/scheduler.h kernel/kheap.h
 	$(CC) $(CFLAGS) $< -o $@
 
-kernel/vfs.o: kernel/vfs.c kernel/vfs.h kernel/kheap.h
+kernel/vfs.o: kernel/vfs.c kernel/vfs.h kernel/kheap.h $(USER_APPS_HEADER)
 	$(CC) $(CFLAGS) $< -o $@
 
 kernel/process.o: kernel/process.c kernel/process.h kernel/scheduler.h
@@ -96,6 +99,25 @@ smoke: mars.iso
 	grep -q "selftest: PASS" .smoke.log
 	@echo "smoke: PASS"
 
+apphex:
+	@test -n "$(BIN)" || (echo "usage: make apphex BIN=<input-elf> [OUT=<output-file>]" && exit 1)
+	./tools/elf_to_marshex.sh "$(BIN)" "$(OUT)"
+
+user/hello_ping.o: user/hello_ping.s
+	$(CC) $(ASFLAGS) $< -o $@
+
+user/hello_ping.elf: user/hello_ping.o
+	$(LD) -m elf_i386 -nostdlib -N -Ttext 0x40000000 $< -o $@
+
+user/hello_ping.marshex: user/hello_ping.elf
+	./tools/elf_to_marshex.sh $< $@
+
+$(USER_APPS_HEADER): $(USER_HEX_APP) tools/marshex_to_header.sh
+	./tools/marshex_to_header.sh $(USER_HEX_APP) app_hello_ping_marshex > $(USER_APPS_HEADER)
+
+userapps: user/hello_ping.marshex
+	@echo "built user apps: user/hello_ping.marshex"
+
 format:
 	@test -n "$(CLANG_FORMAT)" || (echo "clang-format is required (try: sudo apt install clang-format)" && exit 1)
 	$(CLANG_FORMAT) -i $(C_SOURCES)
@@ -108,4 +130,4 @@ run: mars.iso
 	qemu-system-x86_64 -cdrom mars.iso
 
 clean:
-	rm -f boot/boot.o kernel/kernel.o kernel/vga.o kernel/keyboard.o kernel/interrupts.o kernel/timer.o kernel/pmm.o kernel/serial.o kernel/paging.o kernel/kheap.o kernel/syscall.o kernel/scheduler.o kernel/vfs.o kernel/process.o kernel/exec.o kernel/ipc.o kernel/gdt.o kernel/usermode.o kernel/interrupts_asm.o kernel/context_switch.o kernel/gdt_asm.o kernel/usermode_asm.o kernel.bin mars.iso iso/boot/kernel.bin
+	rm -f boot/boot.o kernel/kernel.o kernel/vga.o kernel/keyboard.o kernel/interrupts.o kernel/timer.o kernel/pmm.o kernel/serial.o kernel/paging.o kernel/kheap.o kernel/syscall.o kernel/scheduler.o kernel/vfs.o kernel/process.o kernel/exec.o kernel/ipc.o kernel/gdt.o kernel/usermode.o kernel/interrupts_asm.o kernel/context_switch.o kernel/gdt_asm.o kernel/usermode_asm.o kernel.bin mars.iso iso/boot/kernel.bin user/hello_ping.o user/hello_ping.elf user/hello_ping.marshex $(USER_APPS_HEADER)
