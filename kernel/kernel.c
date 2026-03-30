@@ -66,7 +66,7 @@ static int kernel_run_selftest(void) {
     pid_hello_ping = exec_spawn("hello_ping");
     pid_helloapp = exec_spawn("helloapp");
     if (vfs_write_file("app.badimg", "MARSHEX GG")) {
-        pid_badimg = exec_spawn("badimg");
+        pid_badimg = process_spawn_user("badimg", 0, 0);
     }
 
     if (pid_probe >= 0 || pid_hello_ping >= 0 || pid_helloapp >= 0) {
@@ -94,7 +94,7 @@ static int kernel_run_selftest(void) {
     serial_put_hex32(prog_count);
     serial_puts("\n");
 
-    if (prog_count >= 7u && pid_probe >= 0 && pid_hello_ping >= 0 && pid_helloapp >= 0 &&
+    if (prog_count >= 6u && pid_probe >= 0 && pid_hello_ping >= 0 && pid_helloapp >= 0 &&
         pid_badimg < 0 && ping_delta == 6u && long_write == 0u) {
         serial_puts("selftest: PASS\n");
         return 1;

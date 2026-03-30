@@ -86,13 +86,9 @@ static void app_writer(void *arg) {
 }
 
 static program_entry_t programs[] = {
-    {"counter", EXEC_MODE_KERNEL, app_counter, 0u},
-    {"writer", EXEC_MODE_KERNEL, app_writer, 0u},
-    {"hello_ping", EXEC_MODE_USER, 0, 0u},
-    {"helloapp", EXEC_MODE_USER, 0, 0u},
-    {"badimg", EXEC_MODE_USER, 0, 0u},
-    {"userprobe", EXEC_MODE_USER, 0, 1u},
-    {"uping", EXEC_MODE_USER, 0, 2u},
+    {"counter", EXEC_MODE_KERNEL, app_counter, 0u}, {"writer", EXEC_MODE_KERNEL, app_writer, 0u},
+    {"hello_ping", EXEC_MODE_USER, 0, 0u},          {"helloapp", EXEC_MODE_USER, 0, 0u},
+    {"userprobe", EXEC_MODE_USER, 0, 1u},           {"uping", EXEC_MODE_USER, 0, 2u},
 };
 
 int exec_init(void) { return 1; }
