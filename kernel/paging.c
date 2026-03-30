@@ -2,6 +2,7 @@
 
 #include "paging.h"
 #include "pmm.h"
+#include "process.h"
 #include "scheduler.h"
 #include "serial.h"
 #include "vga.h"
@@ -317,23 +318,61 @@ void paging_switch_directory(uint32_t directory_phys) {
     paging_current_dir_phys = directory_phys;
 }
 
+static void paging_log_fault_flags_vga(uint32_t error_code) {
+    vga_puts(" flags=");
+    vga_puts((error_code & 0x1u) != 0u ? "P" : "NP");
+    vga_puts((error_code & 0x2u) != 0u ? "|W" : "|R");
+    vga_puts((error_code & 0x4u) != 0u ? "|U" : "|K");
+    if ((error_code & 0x8u) != 0u) {
+        vga_puts("|RSVD");
+    }
+    if ((error_code & 0x10u) != 0u) {
+        vga_puts("|IF");
+    }
+}
+
+static void paging_log_fault_flags_serial(uint32_t error_code) {
+    serial_puts(" flags=");
+    serial_puts((error_code & 0x1u) != 0u ? "P" : "NP");
+    serial_puts((error_code & 0x2u) != 0u ? "|W" : "|R");
+    serial_puts((error_code & 0x4u) != 0u ? "|U" : "|K");
+    if ((error_code & 0x8u) != 0u) {
+        serial_puts("|RSVD");
+    }
+    if ((error_code & 0x10u) != 0u) {
+        serial_puts("|IF");
+    }
+}
+
 void paging_handle_page_fault(uint32_t error_code) {
     uint32_t cr2;
+    const uint32_t tid = scheduler_current_task_id();
+    const uint32_t pid = process_current_pid();
 
     __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
 
-    if ((error_code & 0x4u) != 0u && scheduler_current_task_id() != 0u) {
+    if ((error_code & 0x4u) != 0u && tid != 0u) {
         vga_puts("\nuser page fault: task terminated\n");
         vga_puts("cr2=");
         vga_put_hex32(cr2);
         vga_puts(" err=");
         vga_put_hex32(error_code);
+        vga_puts(" pid=");
+        vga_put_dec32(pid);
+        vga_puts(" tid=");
+        vga_put_dec32(tid);
+        paging_log_fault_flags_vga(error_code);
         vga_putc('\n');
 
         serial_puts("user page fault: task terminated cr2=");
         serial_put_hex32(cr2);
         serial_puts(" err=");
         serial_put_hex32(error_code);
+        serial_puts(" pid=");
+        serial_put_hex32(pid);
+        serial_puts(" tid=");
+        serial_put_hex32(tid);
+        paging_log_fault_flags_serial(error_code);
         serial_puts("\n");
 
         scheduler_exit_current();
@@ -347,12 +386,22 @@ void paging_handle_page_fault(uint32_t error_code) {
     vga_put_hex32(cr2);
     vga_puts(" err=");
     vga_put_hex32(error_code);
+    vga_puts(" pid=");
+    vga_put_dec32(pid);
+    vga_puts(" tid=");
+    vga_put_dec32(tid);
+    paging_log_fault_flags_vga(error_code);
     vga_putc('\n');
 
     serial_puts("KERNEL PANIC: page fault cr2=");
     serial_put_hex32(cr2);
     serial_puts(" err=");
     serial_put_hex32(error_code);
+    serial_puts(" pid=");
+    serial_put_hex32(pid);
+    serial_puts(" tid=");
+    serial_put_hex32(tid);
+    paging_log_fault_flags_serial(error_code);
     serial_puts("\n");
 
     while (1) {
