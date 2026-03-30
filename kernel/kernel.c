@@ -36,7 +36,7 @@ static void demo_task(void *arg) {
     }
 }
 
-static void kernel_run_selftest(void) {
+static int kernel_run_selftest(void) {
     uint32_t ping_before;
     uint32_t ping_after;
     uint32_t ping_delta;
@@ -84,8 +84,10 @@ static void kernel_run_selftest(void) {
     if (prog_count >= 7u && pid_probe >= 0 && pid_hello_ping >= 0 && pid_helloapp >= 0 &&
         pid_badimg < 0 && ping_delta == 6u) {
         serial_puts("selftest: PASS\n");
+        return 1;
     } else {
         serial_puts("selftest: FAIL spawn path\n");
+        return 0;
     }
 }
 
@@ -802,8 +804,11 @@ static void run_command(const char *line, const multiboot_info_t *mbi) {
     }
 
     if (streq(line, "selftest")) {
-        kernel_run_selftest();
-        vga_puts("selftest done (see serial log)\n");
+        if (kernel_run_selftest()) {
+            vga_puts("selftest: PASS (see serial log)\n");
+        } else {
+            vga_puts("selftest: FAIL (see serial log)\n");
+        }
         return;
     }
 
@@ -1207,7 +1212,13 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_addr) {
     serial_puts("ipc: ready\n");
     vga_puts("vfs: ready\n");
     serial_puts("vfs: ready\n");
-    kernel_run_selftest();
+    if (!kernel_run_selftest()) {
+        vga_puts("selftest failed; halting\n");
+        serial_puts("selftest: HALT\n");
+        while (1) {
+            __asm__ volatile("hlt");
+        }
+    }
     vga_puts("type 'help'\n\n");
 
     char line[SHELL_LINE_MAX];
