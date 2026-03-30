@@ -209,7 +209,11 @@ static int process_load_user_image_bytes_from_vfs(const char *program_name, uint
 
         {
             uint32_t j = 0;
-            while (program_name[j] != '\0' && i + 1u < sizeof(alt_name)) {
+            while (program_name[j] != '\0') {
+                if (i + 1u >= sizeof(alt_name)) {
+                    return 0;
+                }
+
                 alt_name[i++] = program_name[j++];
             }
         }
