@@ -77,7 +77,6 @@ typedef struct {
 #define ELF_VERSION_CURRENT 1u
 #define ELF_MACHINE_X86 3u
 #define ELF_TYPE_EXEC 2u
-#define ELF_TYPE_DYN 3u
 #define ELF_PT_LOAD 1u
 
 static uint32_t str_len(const char *s) {
@@ -268,7 +267,13 @@ static int process_load_elf32_single_page(const uint8_t *image, uint32_t image_l
     if (eh->e_machine != ELF_MACHINE_X86) {
         return 0;
     }
-    if (eh->e_type != ELF_TYPE_EXEC && eh->e_type != ELF_TYPE_DYN) {
+    if (eh->e_type != ELF_TYPE_EXEC) {
+        return 0;
+    }
+    if (eh->e_version != ELF_VERSION_CURRENT) {
+        return 0;
+    }
+    if (eh->e_ehsize != sizeof(elf32_ehdr_t)) {
         return 0;
     }
     if (eh->e_phentsize != sizeof(elf32_phdr_t)) {
