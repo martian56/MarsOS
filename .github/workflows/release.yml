@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (for example: v0.1.0)"
+        required: true
+        type: string
+      target:
+        description: "Branch or commit to tag when creating a release manually"
+        required: false
+        default: "main"
+        type: string
+      prerelease:
+        description: "Mark release as prerelease"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+            target="${{ inputs.target }}"
+            prerelease="${{ inputs.prerelease }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+            target="${GITHUB_SHA}"
+            prerelease="false"
+          fi
+
+          if [[ ! "$tag" =~ ^v[0-9]+([.][0-9]+){0,2}([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid tag '$tag'. Use a v-prefixed tag such as v1.2.3." >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-multilib \
+            binutils \
+            grub-pc-bin \
+            xorriso \
+            mtools \
+            clang-format \
+            qemu-system-x86
+
+      - name: Check formatting
+        run: make format-check
+
+      - name: Build image
+        run: make clean && make -j"$(nproc)"
+
+      - name: Verify multiboot kernel
+        run: make check
+
+      - name: Smoke test
+        run: make smoke
+
+      - name: Generate checksums
+        run: sha256sum mars.iso kernel.bin > SHA256SUMS
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ steps.meta.outputs.target }}
+          generate_release_notes: true
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          files: |
+            mars.iso
+            kernel.bin
+            .smoke.log
+            SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
