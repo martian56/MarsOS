@@ -106,6 +106,10 @@ Release assets include `mars.iso`, `kernel.bin`, `VERSION`, `RELEASE_CHECKLIST.m
 - Issue Templates: [.github/ISSUE_TEMPLATE](.github/ISSUE_TEMPLATE)
 - Release Checklist: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
 
+# Star History
+
+[![Star History Chart](https://api.star-history.com/image?repos=martian56/MarsOS&type=date&legend=top-left)](https://www.star-history.com/?repos=martian56%2FMarsOS&type=date&legend=top-left)
+
 ## License
 
 Distributed under the MIT License. See [LICENSE](LICENSE).
