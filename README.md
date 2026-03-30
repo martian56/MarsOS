@@ -102,13 +102,20 @@ Release assets include `mars.iso`, `kernel.bin`, `VERSION`, `RELEASE_CHECKLIST.m
 - Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 - Contributing Guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Security Policy: [SECURITY.md](SECURITY.md)
+- Architecture Notes: [ARCHITECTURE.md](ARCHITECTURE.md)
 - Pull Request Template: [.github/pull_request_template.md](.github/pull_request_template.md)
 - Issue Templates: [.github/ISSUE_TEMPLATE](.github/ISSUE_TEMPLATE)
 - Release Checklist: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
 
 # Star History
 
-[![Star History Chart](https://api.star-history.com/image?repos=martian56/MarsOS&type=date&legend=top-left)](https://www.star-history.com/?repos=martian56%2FMarsOS&type=date&legend=top-left)
+<a href="https://www.star-history.com/?repos=martian56%2FMarsOS&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=martian56/MarsOS&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=martian56/MarsOS&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=martian56/MarsOS&type=date&legend=top-left" />
+ </picture>
+</a>
 
 ## License
 
