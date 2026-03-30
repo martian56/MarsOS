@@ -7,6 +7,7 @@
 
 #define IDT_ENTRIES 256u
 #define IDT_TYPE_INTERRUPT_GATE 0x8Eu
+#define IDT_TYPE_TRAP_GATE_USER 0xEFu
 
 struct idt_entry {
     uint16_t offset_low;
@@ -27,19 +28,25 @@ extern void irq_master_stub(void);
 extern void irq_slave_stub(void);
 extern void isr_fault_stub(void);
 extern void page_fault_stub(void);
+extern void syscall_stub(void);
+extern void usermode_exit_stub(void);
 extern void keyboard_buffer_reset(void);
 
 static struct idt_entry idt[IDT_ENTRIES];
 static uint16_t idt_code_selector;
 
-static void idt_set_gate(uint8_t vector, void (*handler)(void)) {
+static void idt_set_gate_attr(uint8_t vector, void (*handler)(void), uint8_t type_attr) {
     const uint32_t addr = (uint32_t)handler;
 
     idt[vector].offset_low = (uint16_t)(addr & 0xFFFFu);
     idt[vector].selector = idt_code_selector;
     idt[vector].zero = 0;
-    idt[vector].type_attr = IDT_TYPE_INTERRUPT_GATE;
+    idt[vector].type_attr = type_attr;
     idt[vector].offset_high = (uint16_t)((addr >> 16) & 0xFFFFu);
+}
+
+static void idt_set_gate(uint8_t vector, void (*handler)(void)) {
+    idt_set_gate_attr(vector, handler, IDT_TYPE_INTERRUPT_GATE);
 }
 
 static void idt_load(void) {
@@ -91,6 +98,8 @@ void interrupts_init(void) {
     for (uint8_t vec = 0x28; vec <= 0x2F; vec++) {
         idt_set_gate(vec, irq_slave_stub);
     }
+    idt_set_gate_attr(0x80, syscall_stub, IDT_TYPE_TRAP_GATE_USER);
+    idt_set_gate_attr(0x81, usermode_exit_stub, IDT_TYPE_TRAP_GATE_USER);
 
     keyboard_buffer_reset();
     idt_set_gate(0x20, irq0_stub);

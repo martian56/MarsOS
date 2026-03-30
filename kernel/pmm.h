@@ -11,6 +11,7 @@ int pmm_free_frame(uint32_t frame);
 uint32_t pmm_total_frames(void);
 uint32_t pmm_used_frames(void);
 uint32_t pmm_free_frames(void);
+uint32_t pmm_highest_address(void);
 int pmm_ready(void);
 
 #endif
