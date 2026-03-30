@@ -97,6 +97,8 @@ smoke: mars.iso
 	rm -f .smoke.log
 	timeout 20s qemu-system-i386 -cdrom mars.iso -display none -serial file:.smoke.log -monitor none || true
 	grep -q "selftest: PASS" .smoke.log
+	grep -q "ping_delta=0x00000006" .smoke.log
+	grep -q "pid_badimg=0xFFFFFFFF" .smoke.log
 	@echo "smoke: PASS"
 
 apphex:
