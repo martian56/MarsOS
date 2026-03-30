@@ -537,6 +537,19 @@ static uint32_t process_alloc_pid(void) {
     return 2u;
 }
 
+static uint32_t irq_save_disable(void) {
+    uint32_t flags;
+
+    __asm__ volatile("pushf; pop %0; cli" : "=r"(flags) : : "memory");
+    return flags;
+}
+
+static void irq_restore(uint32_t flags) {
+    if ((flags & 0x200u) != 0u) {
+        __asm__ volatile("sti" : : : "memory");
+    }
+}
+
 static int process_find_by_tid(uint32_t tid) {
     for (uint32_t i = 0; i < PROCESS_MAX; i++) {
         if (process_table[i].active != 0 && process_table[i].tid == tid) {
@@ -550,6 +563,7 @@ static int process_spawn_common(const char *name, task_entry_t entry, void *arg,
                                 uint8_t is_kernel) {
     int slot;
     int tid;
+    uint32_t irq_flags;
     uint32_t cr3 = 0;
     uint32_t code_frame = 0;
     uint32_t stack_frame = 0;
@@ -587,12 +601,15 @@ static int process_spawn_common(const char *name, task_entry_t entry, void *arg,
         }
     }
 
+    irq_flags = irq_save_disable();
+
     if (is_kernel != 0) {
         tid = scheduler_create_task(entry, arg, name);
     } else {
         tid = scheduler_create_task(process_user_task_entry, (void *)(uint32_t)(slot + 1), name);
     }
     if (tid < 0) {
+        irq_restore(irq_flags);
         if (is_kernel == 0) {
             process_unmap_user_pages(cr3);
             pmm_free_frame(stack_frame);
@@ -613,6 +630,8 @@ static int process_spawn_common(const char *name, task_entry_t entry, void *arg,
     process_table[slot].is_kernel = is_kernel;
     process_table[slot].active = 1;
     str_copy(process_table[slot].name, name != 0 ? name : "proc", sizeof(process_table[slot].name));
+
+    irq_restore(irq_flags);
 
     return (int)process_table[slot].pid;
 }

@@ -347,13 +347,42 @@ static void sleep_milliseconds(uint32_t milliseconds) {
     }
 }
 
-static void reboot_system(void) {
-    __asm__ volatile("cli");
+static void reboot_via_triple_fault(void) {
+    struct idt_ptr {
+        uint16_t limit;
+        uint32_t base;
+    } __attribute__((packed));
 
-    while ((inb(0x64) & 0x02u) != 0) {
+    const struct idt_ptr null_idt = {0u, 0u};
+
+    __asm__ volatile("lidt %0" : : "m"(null_idt));
+    __asm__ volatile("int3");
+
+    while (1) {
+        __asm__ volatile("hlt");
+    }
+}
+
+static void reboot_system(void) {
+    uint32_t timeout = 1000000u;
+
+    __asm__ volatile("cli");
+    serial_puts("reboot: i8042 reset\n");
+
+    while ((inb(0x64) & 0x02u) != 0u && timeout > 0u) {
+        timeout--;
     }
 
-    outb(0x64, 0xFE);
+    if (timeout > 0u) {
+        outb(0x64, 0xFE);
+    }
+
+    for (uint32_t i = 0; i < 1000000u; i++) {
+        __asm__ volatile("pause");
+    }
+
+    serial_puts("reboot: fallback triple-fault\n");
+    reboot_via_triple_fault();
 
     while (1) {
         __asm__ volatile("hlt");
