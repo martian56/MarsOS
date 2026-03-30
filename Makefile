@@ -100,6 +100,7 @@ smoke: mars.iso
 	@grep -q "selftest: PASS" .smoke.log || (echo "smoke: missing selftest PASS marker" && tail -n 40 .smoke.log && exit 1)
 	@grep -q "ping_delta=0x00000006" .smoke.log || (echo "smoke: unexpected ping_delta" && tail -n 40 .smoke.log && exit 1)
 	@grep -q "pid_badimg=0xFFFFFFFF" .smoke.log || (echo "smoke: malformed-image rejection marker missing" && tail -n 40 .smoke.log && exit 1)
+	@grep -q "long_write=0x00000000" .smoke.log || (echo "smoke: overlong-name write rejection marker missing" && tail -n 40 .smoke.log && exit 1)
 	@echo "smoke: PASS"
 
 apphex:

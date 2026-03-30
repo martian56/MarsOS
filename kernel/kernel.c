@@ -41,6 +41,7 @@ static int kernel_run_selftest(void) {
     uint32_t ping_after;
     uint32_t ping_delta;
     uint32_t prog_count;
+    uint32_t long_write = 0xFFFFFFFFu;
     int pid_probe;
     int pid_hello_ping;
     int pid_helloapp;
@@ -50,6 +51,16 @@ static int kernel_run_selftest(void) {
 
     __asm__ volatile("int $0x80" : "=a"(ping_before) : "a"(18u) : "cc", "memory");
     __asm__ volatile("int $0x80" : "=a"(prog_count) : "a"(11u) : "cc", "memory");
+    {
+        static char long_name[] =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_long_name";
+        static char one_byte[] = "x";
+
+        __asm__ volatile("int $0x80"
+                         : "=a"(long_write)
+                         : "a"(8u), "b"(long_name), "c"(one_byte)
+                         : "cc", "memory");
+    }
 
     pid_probe = exec_spawn("userprobe");
     pid_hello_ping = exec_spawn("hello_ping");
@@ -77,12 +88,14 @@ static int kernel_run_selftest(void) {
     serial_put_hex32((uint32_t)pid_helloapp);
     serial_puts(" pid_badimg=");
     serial_put_hex32((uint32_t)pid_badimg);
+    serial_puts(" long_write=");
+    serial_put_hex32(long_write);
     serial_puts(" prog_count=");
     serial_put_hex32(prog_count);
     serial_puts("\n");
 
     if (prog_count >= 7u && pid_probe >= 0 && pid_hello_ping >= 0 && pid_helloapp >= 0 &&
-        pid_badimg < 0 && ping_delta == 6u) {
+        pid_badimg < 0 && ping_delta == 6u && long_write == 0u) {
         serial_puts("selftest: PASS\n");
         return 1;
     } else {

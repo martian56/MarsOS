@@ -91,12 +91,22 @@ static uint32_t copy_in_string(char *dst, uint32_t dst_size, const char *src, in
         }
 
         if (src[i] == '\0') {
-            break;
+            dst[i] = '\0';
+            return i;
         }
 
         dst[i] = src[i];
         i++;
     }
+
+    if (!ptr_range_ok(src + i, 1u, user_only)) {
+        return UINT32_MAX;
+    }
+
+    if (src[i] != '\0') {
+        return UINT32_MAX;
+    }
+
     dst[i] = '\0';
     return i;
 }
