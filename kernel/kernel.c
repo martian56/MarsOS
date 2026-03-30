@@ -43,6 +43,8 @@ static int kernel_run_selftest(void) {
     uint32_t prog_count;
     uint32_t proc_after = 0xFFFFFFFFu;
     uint32_t long_write = 0xFFFFFFFFu;
+    uint32_t stress_created = 0u;
+    uint32_t stress_failed = 0u;
     int stress_ok = 1;
     int pid_probe;
     int pid_hello_ping;
@@ -82,9 +84,12 @@ static int kernel_run_selftest(void) {
         const int stress_pid = exec_spawn("userprobe");
 
         if (stress_pid < 0) {
+            stress_failed++;
             stress_ok = 0;
             break;
         }
+
+        stress_created++;
 
         for (uint32_t i = 0; i < 6u; i++) {
             scheduler_yield();
@@ -112,6 +117,10 @@ static int kernel_run_selftest(void) {
     serial_put_hex32(long_write);
     serial_puts(" stress_ok=");
     serial_put_hex32((uint32_t)stress_ok);
+    serial_puts(" stress_created=");
+    serial_put_hex32(stress_created);
+    serial_puts(" stress_failed=");
+    serial_put_hex32(stress_failed);
     serial_puts(" proc_after=");
     serial_put_hex32(proc_after);
     serial_puts(" prog_count=");
@@ -120,7 +129,7 @@ static int kernel_run_selftest(void) {
 
     if (prog_count >= 6u && pid_probe >= 0 && pid_hello_ping >= 0 && pid_helloapp >= 0 &&
         pid_badimg < 0 && ping_delta == 6u && long_write == 0u && stress_ok != 0 &&
-        proc_after == 1u) {
+        stress_created == 4u && stress_failed == 0u && proc_after == 1u) {
         serial_puts("selftest: PASS\n");
         return 1;
     } else {

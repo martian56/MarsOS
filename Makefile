@@ -102,6 +102,8 @@ smoke: mars.iso
 	@grep -q "pid_badimg=0xFFFFFFFF" .smoke.log || (echo "smoke: malformed-image rejection marker missing" && tail -n 40 .smoke.log && exit 1)
 	@grep -q "long_write=0x00000000" .smoke.log || (echo "smoke: overlong-name write rejection marker missing" && tail -n 40 .smoke.log && exit 1)
 	@grep -q "stress_ok=0x00000001" .smoke.log || (echo "smoke: process stress marker missing" && tail -n 40 .smoke.log && exit 1)
+	@grep -q "stress_created=0x00000004" .smoke.log || (echo "smoke: stress created count mismatch" && tail -n 40 .smoke.log && exit 1)
+	@grep -q "stress_failed=0x00000000" .smoke.log || (echo "smoke: stress failure count mismatch" && tail -n 40 .smoke.log && exit 1)
 	@grep -q "proc_after=0x00000001" .smoke.log || (echo "smoke: process leak marker missing" && tail -n 40 .smoke.log && exit 1)
 	@echo "smoke: PASS"
 
