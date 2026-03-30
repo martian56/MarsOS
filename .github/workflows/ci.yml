@@ -7,6 +7,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -28,10 +29,18 @@ jobs:
         run: make format-check
 
       - name: Build image
-        run: make
+        run: make clean && make -j"$(nproc)"
 
       - name: Verify multiboot kernel
         run: make check
 
       - name: Smoke test
         run: make smoke
+
+      - name: Upload smoke log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-log
+          path: .smoke.log
+          if-no-files-found: ignore
