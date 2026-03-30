@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a defect in build, boot, runtime behavior, or docs
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+        Please include enough detail for deterministic reproduction.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is wrong?
+      placeholder: Concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Exact commands/steps to reproduce.
+      placeholder: |
+        1. make clean && make -j"$(nproc)"
+        2. make smoke
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and output
+      description: Include serial logs, smoke output, or kernel messages.
+      render: shell
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or tag
+      description: Git commit hash or release tag where this was observed.
+      placeholder: main / v0.1.0 / abc1234
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I can reproduce this on the latest main branch.
+          required: true

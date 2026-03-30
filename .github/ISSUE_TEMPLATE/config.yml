@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability report
+    url: https://github.com/martian56/MarsOS/security/advisories/new
+    about: Please use private advisories for security issues.
+  - name: Contribution guide
+    url: https://github.com/martian56/MarsOS/blob/main/CONTRIBUTING.md
+    about: Read contribution expectations before opening a PR.
