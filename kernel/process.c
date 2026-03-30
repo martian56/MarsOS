@@ -249,6 +249,7 @@ static int process_load_elf32_single_page(const uint8_t *image, uint32_t image_l
                                           uint32_t code_size, uint32_t *entry_out) {
     const elf32_ehdr_t *eh;
     int loaded_any = 0;
+    int entry_in_load = 0;
 
     if (image == 0 || code == 0 || entry_out == 0 || image_len < sizeof(elf32_ehdr_t)) {
         return 0;
@@ -304,6 +305,10 @@ static int process_load_elf32_single_page(const uint8_t *image, uint32_t image_l
             continue;
         }
 
+        if (ph->p_vaddr > UINT32_MAX - ph->p_memsz) {
+            return 0;
+        }
+
         if (ph->p_filesz > ph->p_memsz) {
             return 0;
         }
@@ -328,6 +333,10 @@ static int process_load_elf32_single_page(const uint8_t *image, uint32_t image_l
             mem_zero_u8((uint8_t *)code + seg_off + ph->p_filesz, ph->p_memsz - ph->p_filesz);
         }
 
+        if (eh->e_entry >= ph->p_vaddr && eh->e_entry < (ph->p_vaddr + ph->p_memsz)) {
+            entry_in_load = 1;
+        }
+
         loaded_any = 1;
     }
 
@@ -336,6 +345,10 @@ static int process_load_elf32_single_page(const uint8_t *image, uint32_t image_l
     }
 
     if (eh->e_entry < code_vaddr || eh->e_entry >= (code_vaddr + code_size)) {
+        return 0;
+    }
+
+    if (!entry_in_load) {
         return 0;
     }
 
