@@ -41,7 +41,9 @@ static int kernel_run_selftest(void) {
     uint32_t ping_after;
     uint32_t ping_delta;
     uint32_t prog_count;
+    uint32_t proc_after = 0xFFFFFFFFu;
     uint32_t long_write = 0xFFFFFFFFu;
+    int stress_ok = 1;
     int pid_probe;
     int pid_hello_ping;
     int pid_helloapp;
@@ -75,6 +77,24 @@ static int kernel_run_selftest(void) {
             process_reap();
         }
     }
+
+    for (uint32_t round = 0; round < 4u; round++) {
+        const int stress_pid = exec_spawn("userprobe");
+
+        if (stress_pid < 0) {
+            stress_ok = 0;
+            break;
+        }
+
+        for (uint32_t i = 0; i < 6u; i++) {
+            scheduler_yield();
+            process_reap();
+        }
+    }
+
+    process_reap();
+    proc_after = process_count();
+
     __asm__ volatile("int $0x80" : "=a"(ping_after) : "a"(18u) : "cc", "memory");
     ping_delta = ping_after - ping_before;
 
@@ -90,12 +110,17 @@ static int kernel_run_selftest(void) {
     serial_put_hex32((uint32_t)pid_badimg);
     serial_puts(" long_write=");
     serial_put_hex32(long_write);
+    serial_puts(" stress_ok=");
+    serial_put_hex32((uint32_t)stress_ok);
+    serial_puts(" proc_after=");
+    serial_put_hex32(proc_after);
     serial_puts(" prog_count=");
     serial_put_hex32(prog_count);
     serial_puts("\n");
 
     if (prog_count >= 6u && pid_probe >= 0 && pid_hello_ping >= 0 && pid_helloapp >= 0 &&
-        pid_badimg < 0 && ping_delta == 6u && long_write == 0u) {
+        pid_badimg < 0 && ping_delta == 6u && long_write == 0u && stress_ok != 0 &&
+        proc_after == 1u) {
         serial_puts("selftest: PASS\n");
         return 1;
     } else {
