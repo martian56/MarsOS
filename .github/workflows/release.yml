@@ -138,6 +138,7 @@ jobs:
             mars.iso
             kernel.bin
             VERSION
+            RELEASE_CHECKLIST.md
             .smoke.log
             SHA256SUMS
         env:
