@@ -506,6 +506,37 @@ static int process_find_free_slot(void) {
     return -1;
 }
 
+static int process_pid_in_use(uint32_t pid) {
+    for (uint32_t i = 0; i < PROCESS_MAX; i++) {
+        if (process_table[i].active != 0 && process_table[i].pid == pid) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static uint32_t process_alloc_pid(void) {
+    for (uint32_t tries = 0; tries <= PROCESS_MAX; tries++) {
+        uint32_t pid = next_pid;
+
+        if (pid < 2u) {
+            pid = 2u;
+        }
+
+        next_pid = pid + 1u;
+        if (next_pid < 2u) {
+            next_pid = 2u;
+        }
+
+        if (!process_pid_in_use(pid)) {
+            return pid;
+        }
+    }
+
+    return 2u;
+}
+
 static int process_find_by_tid(uint32_t tid) {
     for (uint32_t i = 0; i < PROCESS_MAX; i++) {
         if (process_table[i].active != 0 && process_table[i].tid == tid) {
@@ -571,7 +602,7 @@ static int process_spawn_common(const char *name, task_entry_t entry, void *arg,
         return -1;
     }
 
-    process_table[slot].pid = next_pid++;
+    process_table[slot].pid = process_alloc_pid();
     process_table[slot].tid = (uint32_t)tid;
     process_table[slot].cr3 = cr3;
     process_table[slot].user_code_frame = code_frame;
