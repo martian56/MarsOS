@@ -1,6 +1,8 @@
 #include <stdint.h>
 
 #include "io.h"
+#include "process.h"
+#include "scheduler.h"
 #include "serial.h"
 #include "timer.h"
 #include "vga.h"
@@ -111,10 +113,23 @@ void interrupts_init(void) {
 }
 
 void interrupts_fault_panic(void) {
+    const uint32_t tid = scheduler_current_task_id();
+    const uint32_t pid = process_current_pid();
+
     __asm__ volatile("cli");
     vga_puts("\n\nKERNEL PANIC: CPU exception\n");
+    vga_puts("pid=");
+    vga_put_dec32(pid);
+    vga_puts(" tid=");
+    vga_put_dec32(tid);
+    vga_putc('\n');
     vga_puts("System halted\n");
     serial_puts("KERNEL PANIC: CPU exception\n");
+    serial_puts("pid=");
+    serial_put_hex32(pid);
+    serial_puts(" tid=");
+    serial_put_hex32(tid);
+    serial_puts("\n");
     serial_puts("System halted\n");
     while (1) {
         __asm__ volatile("hlt");
